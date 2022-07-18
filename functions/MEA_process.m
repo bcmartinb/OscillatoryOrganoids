@@ -1,4 +1,5 @@
-function MEA_process(data_folder, wells2process)
+function MEA_process(data_folder, wells2process, spikes=True, lfp=True)
+%   Modified Jul 2022 by B Martin-Burgos
 %   MEA_process(data_folder, wells2process)
 %       data_folder: file path of folder where raw .mat well data is stored
 %       wells2process: wells to process further
@@ -7,6 +8,11 @@ function MEA_process(data_folder, wells2process)
 %       - detect and grab spikes
 %   really this could be applied to high sampling rate data in general, but
 %   for now we keep it to MEA data
+%   spikes: bool, opt, default=True
+%       determines if spike detection is performed 
+%   lfp: bool, opt, default=True
+%       determines if lfp downsampling is performed 
+
 
 %analysis parameters-------------------------------------------------------
 % currently only works for 12 well plates
@@ -34,42 +40,46 @@ for well=wells
     if exist(f, 'file')        
         load(f)
         
-        % downsampling LFP to 1000Hz
-        disp('Downsampling... ')
-        LFP{well} = resample(MEA,2,25);
+        if lfp:
+            % downsampling LFP to 1000Hz
+            disp('Downsampling... ')
+            LFP{well} = resample(MEA,2,25);
+        end 
         
-        % spike detection
-        % first apply median well filter
-        % find all 0 channels, exclude those in median calc
-        mask = 1-all(MEA==0);
-        well_med = median(MEA(:,find(mask)),2);
-        % re-reference only the channels that have data
-        MEA = MEA - well_med*mask;
-        
-        disp('Filtering... ')
-        % filtering and do spike detection
-        filtered = butterpass(MEA,fs,sp_freq,3);
-        try
-            [spikes(well,:), spike_cnt(well,:)] = spike_detect_abs(filtered,fs,std_thr);
-        catch
-            keyboard
-        end
-        
-        % grab spike waveforms and compute average spike shape
-        for chan = 1:num_chan
-            spike_shape{well,chan} = collect_spikes(filtered,[],spikes{well,chan},spike_len);
-            %.*repmat(-sign(spike_shape{well,chan}(spike_len+1,:)),spike_len*2+1,1)
-            
-            if ~isempty(spike_shape{well,chan})
-                % get average spike waveform
-                % spike_avg(well,chan,:) = mean(spike_shape{well,chan},2);
-                
-                % little matrix trick to get the average: taking the inner
-                % product between spike shape and its polarity flips all
-                % the spikes to the same direction
-                spike_avg(well,chan,:) = -sign(spike_shape{well,chan}(spike_len+1,:))*spike_shape{well,chan}';
+        if spikes:
+            % spike detection
+            % first apply median well filter
+            % find all 0 channels, exclude those in median calc
+            mask = 1-all(MEA==0);
+            well_med = median(MEA(:,find(mask)),2);
+            % re-reference only the channels that have data
+            MEA = MEA - well_med*mask;
+
+            disp('Filtering... ')
+            % filtering and do spike detection
+            filtered = butterpass(MEA,fs,sp_freq,3);
+            try
+                [spikes(well,:), spike_cnt(well,:)] = spike_detect_abs(filtered,fs,std_thr);
+            catch
+                keyboard
             end
-        end   
+
+            % grab spike waveforms and compute average spike shape
+            for chan = 1:num_chan
+                spike_shape{well,chan} = collect_spikes(filtered,[],spikes{well,chan},spike_len);
+                %.*repmat(-sign(spike_shape{well,chan}(spike_len+1,:)),spike_len*2+1,1)
+
+                if ~isempty(spike_shape{well,chan})
+                    % get average spike waveform
+                    % spike_avg(well,chan,:) = mean(spike_shape{well,chan},2);
+
+                    % little matrix trick to get the average: taking the inner
+                    % product between spike shape and its polarity flips all
+                    % the spikes to the same direction
+                    spike_avg(well,chan,:) = -sign(spike_shape{well,chan}(spike_len+1,:))*spike_shape{well,chan}';
+                end
+            end   
+          end 
         
     else
         disp('Non-existent well, skip.')
@@ -78,5 +88,9 @@ end
 
 t_s = t;
 t_ds = (t(1):(1/fs_ds):t(end))';
-final_output = [data_folder, '/LFP_Sp.mat'];
+if spikes:
+    final_output = [data_folder, '/Sp.mat'];
+elseif lfp:
+    final_output = [data_folder, '/LFP.mat'];
+end
 save(final_output, 'LFP', 't_ds', 'fs_ds', 'spikes', 'spike_shape', 'spike_avg', 'spike_cnt', 't_s', '-v7.3')
