@@ -1,4 +1,4 @@
-function MEA_process(data_folder, wells2process, spikes=True, lfp=True)
+function MEA_process(data_folder, wells2process, spikes, lfp)
 %   Modified Jul 2022 by B Martin-Burgos
 %   MEA_process(data_folder, wells2process)
 %       data_folder: file path of folder where raw .mat well data is stored
@@ -8,9 +8,9 @@ function MEA_process(data_folder, wells2process, spikes=True, lfp=True)
 %       - detect and grab spikes
 %   really this could be applied to high sampling rate data in general, but
 %   for now we keep it to MEA data
-%   spikes: bool, opt, default=True
+%   spikes: bool
 %       determines if spike detection is performed 
-%   lfp: bool, opt, default=True
+%   lfp: bool
 %       determines if lfp downsampling is performed 
 
 
